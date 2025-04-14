@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pkl
+
+# Data
+data/raw/
+data/processed/
+data/temp/
+outputs/checkpoints/
+outputs/results/
+outputs/plots/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# System
+.DS_Store
+.env
