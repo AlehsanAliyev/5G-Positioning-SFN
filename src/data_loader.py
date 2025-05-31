@@ -68,7 +68,7 @@
 import pandas as pd
 import os
 
-RAW_DATA_DIR = "data/raw"
+RAW_DATA_DIR = "../data/raw"
 
 def load_excel_stats(filepath: str, stat_filter="Mean") -> pd.DataFrame:
     """
@@ -79,7 +79,6 @@ def load_excel_stats(filepath: str, stat_filter="Mean") -> pd.DataFrame:
 
     if "Statistic" in df.columns and stat_filter:
         df = df[df["Statistic"] == stat_filter].reset_index(drop=True)
-
     return df
 
 def load_downlink_data(stat_filter="Mean") -> pd.DataFrame:

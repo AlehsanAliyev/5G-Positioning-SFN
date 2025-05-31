@@ -1,0 +1,13 @@
+,0
+Message,2976
+NR_UE_RRCHOOK,14
+NR_UE_RRCHOAttempt,7
+NR_UE_RACH_Attempt,3
+NR_UE_RACH_OK,0
+NR_UE_RACH_Fail,0
+NR_UE_RRCReEstAttempt,0
+NR_UE_RRCReEstFail,0
+NR_UE_RRCConnectionAttempt,0
+NR_UE_RRCConnectionSetupOk,0
+NR_UE_RRCConnectionComplete,0
+NR_UE_RRCConnectionDrop,0

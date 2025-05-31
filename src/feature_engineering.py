@@ -103,6 +103,16 @@ def preview():
     print("🧾 Raw shape:", df.shape)
 
     X, y = extract_features_and_labels(df)
+
+    # ---- TEMP: See which features are kept ----
+    null_fraction = df.isnull().mean()
+    keep_cols = null_fraction[null_fraction < 0.5].index.tolist()
+    for col in ["lat", "lon"]:
+        if col in keep_cols:
+            keep_cols.remove(col)
+    print("🧩 Feature labels used in X:", keep_cols)
+    # -------------------------------------------
+
     print("✅ Cleaned features shape:", X.shape)
     print("✅ Labels shape:", y.shape)
     print("📍 Sample label:", y[0])

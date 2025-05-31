@@ -1,19 +1,21 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
+*.py[cod]
 *.pkl
 
-# Data
-data/raw/
-data/processed/
-data/temp/
-outputs/checkpoints/
-outputs/results/
-outputs/plots/
-
-# Jupyter
+# Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
-# System
+# System files
 .DS_Store
 .env
+
+# Data (usually large or private)
+data/
+
+# Model checkpoints (can be large)
+outputs/checkpoints/
+
+# Optional: Ignore results if they are reproducible
+# outputs/results/
+# outputs/plots/
