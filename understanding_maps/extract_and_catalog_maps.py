@@ -10,7 +10,7 @@ from rasterio.plot import show
 from rasterio.windows import Window
 
 # Directory where maps are already unzipped
-EXTRACT_DIR = '../data/raw/maps'
+EXTRACT_DIR = '../5G-Positioning-SFN/data/raw/maps'
 # Directory for saving visual outputs instead of shapefiles
 VIS_DIR = 'visualizations2'
 os.makedirs(VIS_DIR, exist_ok=True)

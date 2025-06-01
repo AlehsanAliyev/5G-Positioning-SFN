@@ -9,6 +9,7 @@ import joblib
 
 from feature_engineering2 import merge_signal_data, extract_features_and_labels
 from models.structured_mlp import StructuredMLP
+from dataloader2 import load_downlink_series_data, load_uplink_series_data
 
 CHECKPOINT_DIR = "outputs/checkpoints_v2"
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
@@ -45,23 +46,69 @@ def train_model(X, y_scaled, input_dim, save_path, epochs=100, lr=1e-3):
 
 
 def main():
+    # DOWNLINK
     print("📦 Loading real GPS-labeled signal data...")
-    df = merge_signal_data()
+    df = load_downlink_series_data()
+    df = merge_signal_data(df)
+    df.to_csv("analysis_outputs/train_DL.csv", index=False)
     X, y, _ = extract_features_and_labels(df)
 
     print("⚖️ Normalizing GPS labels...")
     y_scaler = MinMaxScaler()
     y_scaled = y_scaler.fit_transform(y)
 
-    joblib.dump(y_scaler, os.path.join(CHECKPOINT_DIR, "y_scaler_v2.pkl"))
+    joblib.dump(y_scaler, os.path.join(CHECKPOINT_DIR, "y_scaler_v2_dl.pkl"))
 
     input_dim = X.shape[1]
     print(f"✅ Training samples: {len(X)} | Feature dimension: {input_dim}")
 
-    save_path = os.path.join(CHECKPOINT_DIR, "mlp_real_gps_scaled_v2.pth")
+    save_path = os.path.join(CHECKPOINT_DIR, "mlp_real_gps_scaled_v2_dl.pth")
 
     print("🚀 Starting model training...")
     train_model(X, y_scaled, input_dim, save_path)
+
+
+
+    # UPLINK
+    df = load_uplink_series_data()
+    df = merge_signal_data(df)
+    df.to_csv("analysis_outputs/train_UL.csv", index=False)
+    X, y, _ = extract_features_and_labels(df)
+
+    print("⚖️ Normalizing GPS labels...")
+    y_scaler = MinMaxScaler()
+    y_scaled = y_scaler.fit_transform(y)
+
+    joblib.dump(y_scaler, os.path.join(CHECKPOINT_DIR, "y_scaler_v2_ul.pkl"))
+
+    input_dim = X.shape[1]
+    print(f"✅ Training samples: {len(X)} | Feature dimension: {input_dim}")
+
+    save_path = os.path.join(CHECKPOINT_DIR, "mlp_real_gps_scaled_v2_ul.pth")
+
+    print("🚀 Starting model training...")
+    train_model(X, y_scaled, input_dim, save_path)
+
+    # # SCANNER
+    # df = load_uplink_series_data()
+    # df = merge_signal_data(df)
+    # df.to_csv("analysis_outputs/train_UL.csv", index=False)
+    # X, y, _ = extract_features_and_labels(df)
+
+    # print("⚖️ Normalizing GPS labels...")
+    # y_scaler = MinMaxScaler()
+    # y_scaled = y_scaler.fit_transform(y)
+
+    # joblib.dump(y_scaler, os.path.join(CHECKPOINT_DIR, "y_scaler_v2_ul.pkl"))
+
+    # input_dim = X.shape[1]
+    # print(f"✅ Training samples: {len(X)} | Feature dimension: {input_dim}")
+
+    # save_path = os.path.join(CHECKPOINT_DIR, "mlp_real_gps_scaled_v2_ul.pth")
+
+    # print("🚀 Starting model training...")
+    # train_model(X, y_scaled, input_dim, save_path)
+
 
 
 if __name__ == "__main__":

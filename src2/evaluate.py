@@ -9,22 +9,47 @@ import matplotlib.pyplot as plt
 import geopandas as gpd
 from shapely.geometry import Point
 
+from dataloader2 import load_base_station_config, load_uplink_series_data, load_downlink_series_data
 from feature_engineering2 import merge_signal_data, extract_features_and_labels
 from models.structured_mlp import StructuredMLP
 
 CHECKPOINT_PATH = "outputs/checkpoints_v2/mlp_real_gps_scaled_v2.pth"
 SCALER_PATH = "outputs/checkpoints_v2/y_scaler_v2.pkl"
+
+DL_CHECKPOINT = "outputs/checkpoints_v2/mlp_real_gps_scaled_v2_dl.pth"
+UL_CHECKPOINT = "outputs/checkpoints_v2/mlp_real_gps_scaled_v2_ul.pth"
+# SCAN_CHECKPOINT = "outputs/checkpoints_v2/mlp_real_gps_scaled_v2_scanner.pth"
+
+DL_SCALER = "outputs/checkpoints_v2/y_scaler_v2_dl.pkl"
+UL_SCALER = "outputs/checkpoints_v2/y_scaler_v2_ul.pkl"
+# SCAN_SCALER = "outputs/checkpoints_v2/y_scaler_v2_scanner.pkl"
+
 RESULTS_DIR = "outputs/results_v2"
 PLOTS_DIR = "outputs/plots_v2"
 os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(PLOTS_DIR, exist_ok=True)
 
 
-def load_model(input_dim):
+def load_model_and_scaler(path_model, path_scaler, input_dim):
     model = StructuredMLP(input_dim)
-    model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location="cpu"))
+    model.load_state_dict(torch.load(path_model, map_location="cpu"))
     model.eval()
-    return model
+    scaler = joblib.load(path_scaler)
+    return model, scaler
+
+def predict(model, X):
+    with torch.no_grad():
+        coords_pred, _ = model(torch.tensor(X, dtype=torch.float32))
+    return coords_pred.numpy()
+
+def fuse_predictions(*preds, weights=None):
+    preds = np.stack(preds)
+    if weights is None:
+        weights = np.ones(len(preds))
+    weights = np.array(weights).reshape(-1, 1, 1)
+    fused = np.sum(preds * weights, axis=0) / np.sum(weights)
+    return fused
+
 
 
 def plot_results_on_map(results_df):
@@ -34,19 +59,24 @@ def plot_results_on_map(results_df):
         print("⚠️ Map shapefile not found. Skipping map plot.")
         return
 
+    df = load_base_station_config()
+
     shapefile_path = matches[0]
     gdf_buildings = gpd.read_file(shapefile_path)
 
     true_pts = [Point(xy) for xy in zip(results_df["true_lon"], results_df["true_lat"])]
     pred_pts = [Point(xy) for xy in zip(results_df["pred_lon"], results_df["pred_lat"])]
+    tower_pts = [Point(xy) for xy in zip(df["lon"], df["lat"])]
 
     gdf_true = gpd.GeoDataFrame(geometry=true_pts, crs="EPSG:4326")
     gdf_pred = gpd.GeoDataFrame(geometry=pred_pts, crs="EPSG:4326")
+    tower_pts = gpd.GeoDataFrame(geometry=tower_pts, crs="EPSG:4326")
 
     fig, ax = plt.subplots(figsize=(10, 10))
     gdf_buildings.plot(ax=ax, color="lightgray", edgecolor="black")
-    gdf_true.plot(ax=ax, color="blue", label="True", markersize=40, alpha=0.6)
-    gdf_pred.plot(ax=ax, color="red", label="Predicted", markersize=40, alpha=0.6)
+    gdf_true.plot(ax=ax, color="blue", label="True", markersize=4, alpha=0.6)
+    gdf_pred.plot(ax=ax, color="red", label="Predicted", markersize=4, alpha=0.6)
+    tower_pts.plot(ax=ax, color="green", label="Tower", markersize=30, alpha=0.6)
 
     plt.title("📍 Predicted vs True GPS Locations (ITÜ Campus)")
     plt.xlabel("Longitude")
@@ -62,37 +92,81 @@ def degrees_to_meters(rmse_deg):
     return rmse_deg * 111_320  # Approx. conversion factor for ITÜ region
 
 
+def align_ul_dl(df_ul, df_dl):
+    i, j = 0, 0
+    rows_ul_to_keep = []
+    rows_dl_to_keep = []
+
+    while i < len(df_ul) and j < len(df_dl):
+        ul_row = df_ul.iloc[i]
+        dl_row = df_dl.iloc[j]
+
+        ul_coord = (round(ul_row["Latitude"], 6), round(ul_row["Longitude"], 6))
+        dl_coord = (round(dl_row["Latitude"], 6), round(dl_row["Longitude"], 6))
+
+        if ul_coord == dl_coord:
+            # Match -> keep both
+            rows_ul_to_keep.append(i)
+            rows_dl_to_keep.append(j)
+            i += 1
+            j += 1
+        else:
+            prev_ul_coord = (round(df_ul.iloc[i - 1]["Latitude"], 6), round(df_ul.iloc[i - 1]["Longitude"], 6))
+            if ul_coord == prev_ul_coord:
+                # Duplicate in UL -> skip this one
+                i += 1
+            else:
+                j += 1
+
+    # Return aligned DataFrames
+    return df_ul.iloc[rows_ul_to_keep].reset_index(drop=True), df_dl.iloc[rows_dl_to_keep].reset_index(drop=True)
+
+
 def evaluate():
-    print("📊 Loading test data...")
-    df = merge_signal_data()
-    X, y_true, _ = extract_features_and_labels(df)
+    print("📊 Loading fused dataset...")
+    df_ul = load_uplink_series_data()
+    df_ul = merge_signal_data(df_ul)
+    
+    df_dl = load_downlink_series_data()
+    df_dl = merge_signal_data(df_dl)
 
-    print("🧠 Loading model and scaler...")
-    model = load_model(input_dim=X.shape[1])
-    y_scaler = joblib.load(SCALER_PATH)
+    df_ul, df_dl = align_ul_dl(df_ul, df_dl)
 
-    with torch.no_grad():
-        coords_pred, _ = model(torch.tensor(X, dtype=torch.float32))
-        coords_pred_np = coords_pred.numpy()
+    X_ul, y, _ = extract_features_and_labels(df_ul)
+    X_dl, y, _ = extract_features_and_labels(df_dl)
 
-    coords_pred_inv = y_scaler.inverse_transform(coords_pred_np)
+    print("🧠 Loading models and scalers...")
+    dl_model, dl_scaler = load_model_and_scaler(DL_CHECKPOINT, DL_SCALER, input_dim=X_dl.shape[1])
+    ul_model, ul_scaler = load_model_and_scaler(UL_CHECKPOINT, UL_SCALER, input_dim=X_ul.shape[1])
+    # scan_model, scan_scaler = load_model_and_scaler(SCAN_CHECKPOINT, SCAN_SCALER, input_dim=X.shape[1])
 
-    rmse = np.sqrt(mean_squared_error(y_true, coords_pred_inv))
+    print("🔮 Predicting...")
+    pred_dl_scaled = predict(dl_model, X_dl)
+    pred_ul_scaled = predict(ul_model, X_ul)
+    # pred_sc_scaled = predict(scan_model, X)
+
+    pred_dl = dl_scaler.inverse_transform(pred_dl_scaled)
+    pred_ul = ul_scaler.inverse_transform(pred_ul_scaled)
+    # pred_sc = scan_scaler.inverse_transform(pred_sc_scaled)
+
+    print("🔗 Fusing predictions...")
+    fused_preds = fuse_predictions(pred_dl, pred_ul, weights=[1, 1])
+
+    rmse = np.sqrt(mean_squared_error(y, fused_preds))
     rmse_m = degrees_to_meters(rmse)
-    print(f"✅ RMSE on test set: {rmse:.4f} degrees (~{rmse_m:.2f} meters)")
+    print(f"✅ Fused RMSE: {rmse:.4f} degrees (~{rmse_m:.2f} meters)")
 
     results_df = pd.DataFrame({
-        "true_lon": y_true[:, 0],
-        "true_lat": y_true[:, 1],
-        "pred_lon": coords_pred_inv[:, 0],
-        "pred_lat": coords_pred_inv[:, 1],
+        "true_lon": y[:, 0],
+        "true_lat": y[:, 1],
+        "pred_lon": fused_preds[:, 0],
+        "pred_lat": fused_preds[:, 1],
     })
 
-    results_df.to_csv(os.path.join(RESULTS_DIR, "fused_predictions_v2.csv"), index=False)
-    print("💾 Saved prediction results.")
+    results_df.to_csv(os.path.join(RESULTS_DIR, "fused_predictions.csv"), index=False)
+    print("💾 Saved fused prediction results.")
 
     plot_results_on_map(results_df)
-
 
 if __name__ == "__main__":
     evaluate()
