@@ -92,34 +92,67 @@ def degrees_to_meters(rmse_deg):
     return rmse_deg * 111_320  # Approx. conversion factor for ITÜ region
 
 
-def align_ul_dl(df_ul, df_dl):
-    i, j = 0, 0
-    rows_ul_to_keep = []
-    rows_dl_to_keep = []
+# Define column-specific invalid thresholds
+COLUMN_THRESHOLDS = {
+    "RSRP": -150,
+    "RSRQ": -30,
+    "SINR": -10,
+}
 
-    while i < len(df_ul) and j < len(df_dl):
-        ul_row = df_ul.iloc[i]
-        dl_row = df_dl.iloc[j]
+# Determine which threshold applies to each column
+def get_threshold(colname):
+    return -9999 # No threshold applied
+    if "RSRP" in colname:
+        return COLUMN_THRESHOLDS["RSRP"]
+    elif "RSRQ" in colname:
+        return COLUMN_THRESHOLDS["RSRQ"]
+    elif "SINR" in colname:
+        return COLUMN_THRESHOLDS["SINR"]
+    else:
+        return -9999  # default catch-all threshold
 
-        ul_coord = (round(ul_row["Latitude"], 6), round(ul_row["Longitude"], 6))
-        dl_coord = (round(dl_row["Latitude"], 6), round(dl_row["Longitude"], 6))
+# Masked mean that accepts a threshold
+def masked_mean(series, threshold):
+    valid = series[series > threshold]
+    return valid.mean() if not valid.empty else np.nan
 
-        if ul_coord == dl_coord:
-            # Match -> keep both
-            rows_ul_to_keep.append(i)
-            rows_dl_to_keep.append(j)
-            i += 1
-            j += 1
-        else:
-            prev_ul_coord = (round(df_ul.iloc[i - 1]["Latitude"], 6), round(df_ul.iloc[i - 1]["Longitude"], 6))
-            if ul_coord == prev_ul_coord:
-                # Duplicate in UL -> skip this one
-                i += 1
-            else:
-                j += 1
+# Modified function to return two separate aligned DataFrames for UL and DL models
 
-    # Return aligned DataFrames
-    return df_ul.iloc[rows_ul_to_keep].reset_index(drop=True), df_dl.iloc[rows_dl_to_keep].reset_index(drop=True)
+def align_dl_ul_separately(df_dl, df_ul, precision=5):
+    def prepare(df, prefix):
+        df = df.copy()
+        df['loc_key'] = df["Latitude"].round(precision).astype(str) + "_" + df["Longitude"].round(precision).astype(str)
+        signal_cols = [col for col in df.columns if col not in ["Latitude", "Longitude", "loc_key"]]
+        
+        agg_funcs = {
+            col: (lambda x, col=col: masked_mean(x, get_threshold(col)))
+            for col in signal_cols
+        }
+
+        grouped = df.groupby("loc_key").agg(agg_funcs)
+        grouped.columns = [f"{prefix}_{col}" for col in grouped.columns]
+        return grouped
+
+    dl_agg = prepare(df_dl, "DL")
+    ul_agg = prepare(df_ul, "UL")
+
+    # Get common location keys
+    common_keys = dl_agg.index.intersection(ul_agg.index)
+
+    # Filter both DataFrames to only include common keys
+    dl_common = dl_agg.loc[common_keys]
+    ul_common = ul_agg.loc[common_keys]
+
+    # Reattach coordinates
+    latlon = df_dl.copy()
+    latlon['loc_key'] = latlon["Latitude"].round(precision).astype(str) + "_" + latlon["Longitude"].round(precision).astype(str)
+    latlon = latlon.drop_duplicates('loc_key')[['loc_key', 'Latitude', 'Longitude']].set_index('loc_key')
+    latlon = latlon.loc[common_keys]
+
+    df_dl_final = pd.concat([latlon, dl_common], axis=1).reset_index(drop=True)
+    df_ul_final = pd.concat([latlon, ul_common], axis=1).reset_index(drop=True)
+
+    return df_dl_final, df_ul_final
 
 
 def evaluate():
@@ -130,7 +163,10 @@ def evaluate():
     df_dl = load_downlink_series_data()
     df_dl = merge_signal_data(df_dl)
 
-    df_ul, df_dl = align_ul_dl(df_ul, df_dl)
+    df_dl, df_ul = align_dl_ul_separately(df_dl, df_ul)
+    df_ul.to_csv("analysis_outputs/ul_alligned.csv", index=False)
+    df_dl.to_csv("analysis_outputs/dl_alligned.csv", index=False)
+        
 
     X_ul, y, _ = extract_features_and_labels(df_ul)
     X_dl, y, _ = extract_features_and_labels(df_dl)
