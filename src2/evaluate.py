@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 import geopandas as gpd
 from shapely.geometry import Point
 
-from dataloader2 import load_base_station_config, load_uplink_series_data, load_downlink_series_data
-from feature_engineering2 import merge_signal_data, extract_features_and_labels
+from dataloader2 import load_base_station_config, load_uplink_series_data, load_downlink_series_data, merge_signal_data
+from feature_engineering2 import extract_features_and_labels
 from models.structured_mlp import StructuredMLP
 
 CHECKPOINT_PATH = "outputs/checkpoints_v2/mlp_real_gps_scaled_v2.pth"

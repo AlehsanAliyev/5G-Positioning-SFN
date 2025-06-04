@@ -7,9 +7,9 @@ import numpy as np
 import os
 import joblib
 
-from feature_engineering2 import merge_signal_data, extract_features_and_labels
+from feature_engineering2 import extract_features_and_labels
 from models.structured_mlp import StructuredMLP
-from dataloader2 import load_downlink_series_data, load_uplink_series_data
+from dataloader2 import load_downlink_series_data, load_uplink_series_data, merge_signal_data
 
 CHECKPOINT_DIR = "outputs/checkpoints_v2"
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
