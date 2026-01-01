@@ -55,5 +55,9 @@ class StructuredMLP(nn.Module):
     def forward(self, x):
         x = self.net(x)
         coords = self.coord_head(x)
-        log_var = self.uncertainty_head(x) if self.output_uncertainty else torch.zeros(len(x), 1)
+        log_var = (
+            self.uncertainty_head(x)
+            if self.output_uncertainty
+            else torch.zeros(len(x), 1, device=x.device)
+        )
         return coords, log_var
