@@ -122,7 +122,7 @@ Predicts location for a single signal sample using the trained model.
 
 > Real vs Predicted positions plotted over the ITÜ campus buildings using shapefile overlays.
 
-![](outputs/plots/map_prediction_overlay.png)
+![](src2/outputs/plots/map_prediction_overlay.png)
 
 ---
 
