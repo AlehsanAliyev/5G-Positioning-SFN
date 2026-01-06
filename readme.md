@@ -118,6 +118,24 @@ Predicts location for a single signal sample using the trained model.
 
 ---
 
+## 🔧 Src3 (DL-only) Pipeline
+
+The `src3` folder contains the tuned downlink-only pipeline with spatially stratified splits and engineered features.
+
+```bash
+python src3/train.py
+python src3/evaluate.py
+```
+
+Recent metrics (stratified spatial split):
+- RMSE: ~0.0002 degrees (~24.94 m)
+- Haversine RMSE: ~30.17 m
+- Median Error: ~19.02 m
+- P90 / P95: ~48.75 m / ~59.24 m
+
+
+---
+
 ## 🗺️ Visualization Preview
 
 > Real vs Predicted positions plotted over the ITÜ campus buildings using shapefile overlays.
